@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grid Mosaic / Puzzle Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container mt-5 text-center">
+    <h2 class="animate__animated animate__fadeInDown mb-4">Grid Mosaic / Puzzle Dashboard</h2>
+    <button class="btn btn-success btn-lg mb-4" onclick="openModal()">
+        <i class="bi bi-plus-circle"></i> Add User
+    </button>
+</div>
+
+<!-- Grid Mosaic Container -->
+<div id="gridContainer" class="grid-mosaic"></div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content animate__animated animate__zoomIn">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="name" class="form-control mb-1" placeholder="Name">
+                <small id="nameFeedback" class="text-warning d-block mb-2"></small>
+
+                <input type="email" id="email" class="form-control mb-1" placeholder="Email">
+                <small id="emailFeedback" class="text-warning d-block mb-2"></small>
+
+                <input type="file" id="profileImage" class="form-control mb-1" accept="image/*">
+                <small id="imageFeedback" class="text-warning d-block mb-2"></small>
+
+                <img id="imagePreview" class="img-thumbnail mb-2" style="width:80px;height:80px;display:none;">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index:11">
+    <div id="toastContainer"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
+
+
+<style>
+    body {
+    background: linear-gradient(135deg,#6a11cb,#2575fc);
+    font-family: 'Arial', sans-serif;
+    color: #fff;
+}
+
+.grid-mosaic {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-auto-rows: 150px;
+    gap: 15px;
+    padding: 0 20px 50px 20px;
+}
+
+.tile {
+    background: rgba(255,255,255,0.15);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+    cursor: pointer;
+    color: #fff;
+}
+
+.tile:hover {
+    transform: scale(1.05) rotate(-2deg);
+    box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+}
+
+.tile img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 10px;
+    border: 2px solid #fff;
+}
+
+.tile button {
+    position: absolute;
+    top: 5px;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border-radius: 50%;
+    width:25px;
+    height:25px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.toast {
+    backdrop-filter: blur(10px);
+    border-radius:10px;
+}
+
+</style>
+
+<script>
+    let users = [];
+let editIndex = null;
+
+const modal = new bootstrap.Modal(document.getElementById("userModal"));
+const gridContainer = document.getElementById("gridContainer");
+
+const nameInput = document.getElementById("name");
+const emailInput = document.getElementById("email");
+const profileInput = document.getElementById("profileImage");
+const imagePreview = document.getElementById("imagePreview");
+const saveBtn = document.getElementById("saveBtn");
+const modalTitle = document.getElementById("modalTitle");
+
+const nameFeedback = document.getElementById("nameFeedback");
+const emailFeedback = document.getElementById("emailFeedback");
+const imageFeedback = document.getElementById("imageFeedback");
+
+const toastContainer = document.getElementById("toastContainer");
+
+// Preview Image
+profileInput.addEventListener("change",()=>{
+    const file = profileInput.files[0];
+    if(file){
+        const reader = new FileReader();
+        reader.onload=e=>{
+            imagePreview.src=e.target.result;
+            imagePreview.style.display="block";
+            validateDuplicate();
+        }
+        reader.readAsDataURL(file);
+    } else {
+        imagePreview.src="";
+        imagePreview.style.display="none";
+        validateDuplicate();
+    }
+});
+
+// Real-time duplicate check
+[nameInput,emailInput,profileInput].forEach(el=>{
+    el.addEventListener("input", validateDuplicate);
+});
+
+function validateDuplicate(){
+    const name=nameInput.value.trim();
+    const email=emailInput.value.trim();
+    const image=imagePreview.src||null;
+
+    nameFeedback.textContent="";
+    emailFeedback.textContent="";
+    imageFeedback.textContent="";
+
+    const duplicate = users.some((user,idx)=>{
+        if(editIndex!==null && idx===editIndex) return false;
+        return user.name===name && user.email===email && user.image===image;
+    });
+
+    if(duplicate){
+        nameFeedback.textContent="Duplicate entry!";
+        emailFeedback.textContent="Duplicate!";
+        imageFeedback.textContent="Duplicate!";
+        return true;
+    }
+    return false;
+}
+
+// Open Modal
+function openModal(index=null){
+    editIndex=index;
+    if(index!==null){
+        modalTitle.textContent="Edit User";
+        const user=users[index];
+        nameInput.value=user.name;
+        emailInput.value=user.email;
+        imagePreview.src=user.image||"";
+        imagePreview.style.display=user.image?"block":"none";
+    } else {
+        modalTitle.textContent="Add User";
+        nameInput.value="";
+        emailInput.value="";
+        profileInput.value="";
+        imagePreview.src="";
+        imagePreview.style.display="none";
+    }
+    validateDuplicate();
+    modal.show();
+}
+
+// Render Grid Mosaic
+function renderGrid(){
+    gridContainer.innerHTML="";
+    users.forEach((user,index)=>{
+        const tile=document.createElement("div");
+        tile.className="tile animate__animated animate__fadeInUp";
+        tile.style.gridRowEnd = `span ${Math.floor(Math.random()*2)+1}`; // random row span
+        tile.style.gridColumnEnd = `span ${Math.floor(Math.random()*2)+1}`; // random col span
+
+        tile.innerHTML=`
+            <img src="${user.image||'https://via.placeholder.com/60'}">
+            <span>${user.name}</span>
+            <span style="font-size:12px">${user.email}</span>
+            <button style="right:5px;" onclick="editTile(${index})"><i class="bi bi-pencil-square"></i></button>
+            <button style="left:5px;" onclick="deleteTile(${index})"><i class="bi bi-trash"></i></button>
+        `;
+        gridContainer.appendChild(tile);
+    });
+}
+
+// Toast
+function showToast(msg,type="success"){
+    const toastEl=document.createElement("div");
+    toastEl.className=`toast align-items-center text-white bg-${type} border-0 animate__animated animate__bounceInRight`;
+    toastEl.role="alert";
+    toastEl.innerHTML=`
+        <div class="d-flex">
+            <div class="toast-body">${msg}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>`;
+    toastContainer.appendChild(toastEl);
+    const bsToast=new bootstrap.Toast(toastEl,{delay:2000});
+    bsToast.show();
+    bsToast._element.addEventListener("hidden.bs.toast",()=>toastEl.remove());
+}
+
+// Save User
+saveBtn.addEventListener("click",()=>{
+    if(validateDuplicate()){
+        showToast("Cannot save duplicate!","warning");
+        return;
+    }
+    const name=nameInput.value.trim();
+    const email=emailInput.value.trim();
+    const file=profileInput.files[0];
+
+    if(!name || !email){
+        alert("Enter name & email!");
+        return;
+    }
+
+    if(file){
+        const reader=new FileReader();
+        reader.onload=e=>saveUser(name,email,e.target.result);
+        reader.readAsDataURL(file);
+    } else {
+        const existingImage=editIndex!==null?users[editIndex].image:null;
+        saveUser(name,email,existingImage);
+    }
+});
+
+function saveUser(name,email,image){
+    if(editIndex===null){
+        users.push({name,email,image});
+        showToast("User added!","success");
+    } else {
+        users[editIndex]={name,email,image};
+        showToast("User updated!","info");
+    }
+    renderGrid();
+    modal.hide();
+}
+
+// Edit/Delete
+function editTile(index){ openModal(index); }
+
+function deleteTile(index){
+    if(confirm("Delete this user?")){
+        users.splice(index,1);
+        showToast("User deleted!","danger");
+        renderGrid();
+    }
+}
+
+// Initial render
+renderGrid();
+
+</script>
